@@ -8,9 +8,9 @@
 | 02 | **BrokenCharacters (30% encoding)** | 1 | Remove non-printable chars | 82.90% | 82.42% | -0.48% | Made worse |
 | 03 | **SwappedValues (title ↔ content)** | 1 | Multi-signal swap detection | 86.64% | 86.68% | +0.04% | Minimal |
 | 04 | **MissingValues MAR (35% patterned)** | 2 | Fill missing with `""` | 55.26% | 80.92% | **+25.66%** | **WORKS** |
-| 05 | **CategoricalShift (label distribution)** | 2 | ⚠️ Cannot fix - requires retraining | 70.60% | 70.60% | 0.00% | No fix |
-| 06 | **LabelNoise (30% flipped labels)** | 2 | Remove confident mislabels (threshold 0.85) | 64.92% | 71.91% | **+6.99%** | ✅ **WORKS** |
-| 07 | **Duplicates (70% duplicated)** | 2 | Deduplicate exact matches | 85.78% | 85.84% | +0.06% | ✅ Works |
+| 05 | **CategoricalShift (label distribution)** | 2 | Cannot fix - requires retraining | 70.60% | 70.60% | 0.00% | No fix |
+| 06 | **LabelNoise (30% flipped labels)** | 2 | Remove confident mislabels (threshold 0.85) | 64.92% | 71.91% | **+6.99%** | **WORKS** |
+| 07 | **Duplicates (70% duplicated)** | 2 | Deduplicate exact matches | 85.78% | 85.84% | +0.06% | Works |
 | 08 | **FakeReviews (30% templates)** | 2 | Remove low-entropy content | 88.60% | 84.80% | -3.80% | Returns to baseline* |
 | 09 | **DistributionShift (50% truncated)** | 2 | Filter short texts (< 100 chars) | 82.36% | 85.39% | **+3.03%** | **WORKS** |
 

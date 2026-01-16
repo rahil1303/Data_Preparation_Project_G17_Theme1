@@ -13,7 +13,7 @@ dist/
 
 # Jupyter
 .ipynb_checkpoints/
-*.ipynb
+#*.ipynb
 
 # Data (don't commit large datasets)
 data/raw/*.csv
@@ -23,6 +23,7 @@ data/processed/*.csv
 data/corrupted/*.csv
 *.h5
 *.pkl
+datasets/*
 
 # Logs
 logs/*.log

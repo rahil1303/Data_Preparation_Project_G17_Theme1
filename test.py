@@ -110,17 +110,7 @@ if len(df_corrupt_source) < 5000:
 else:
     df_corrupt_source = df_corrupt_source.sample(n=5000, random_state=42).reset_index(drop=True)
 
-batches_config = [
-    ("01_missing", inject.apply_missing_values, {}),
-    ("02_broken_chars", inject.apply_broken_characters, {}),
-    ("03_swapped", inject.apply_swapped_text, {}),
-    ("04_missing_labels", inject.apply_missing_labels, {}),
-    ("05_swapped_labels", inject.apply_swapped_labels, {}),
-    ("06_combined_text", inject.apply_combined_text_corruption, {}),
-    ("07_combined_both", inject.apply_combined_text_labels, {}),
-    ("08_heavy_missing", inject.apply_heavy_missing, {}),
-    ("09_all_corruptions", inject.apply_all_corruptions, {}),
-]
+batches_config = inject.corruption_functions
 
 corrupted_batches = {}
 
@@ -133,49 +123,79 @@ for batch_name, corruption_fn, kwargs in batches_config:
     #print(f"✅ {batch_name} generated")
 
 corruption_results = {}
+cleaning_results = {}
+
 for batch_name, df_batch in corrupted_batches.items():
     
+    #X_corrupt = df_batch["text"].values
+    #y_corrupt = df_batch["label"].values
+
     df_batch_clean = clean.clean_all(df_batch)
 
-    X_corrupt = df_batch_clean["text"].values
-    y_corrupt = df_batch_clean["label"].values
+    X_clean = df_batch_clean["text"].values
+    y_clean = df_batch_clean["label"].values
+
 
     # Split corrupted data (80% train, 20% test)
-    X_corrupt_train, X_corrupt_test, y_corrupt_train, y_corrupt_test = train_test_split(
-        X_corrupt, y_corrupt,
+    #X_corrupt_train, X_corrupt_test, y_corrupt_train, y_corrupt_test = train_test_split(
+    #    X_corrupt, y_corrupt,
+    #    test_size=0.2,
+    #    random_state=42,
+    #    stratify=y_corrupt
+    #)
+    #clean data
+    X_clean_train, X_clean_test, y_clean_train, y_clean_test = train_test_split(
+        X_clean, y_clean,
         test_size=0.2,
         random_state=42,
-        stratify=y_corrupt
+        stratify=y_clean
     )
     
-    print(f"   Train samples: {len(X_corrupt_train)}")
-    print(f"   Test samples: {len(X_corrupt_test)}")
+    print(f"   corrupt Train samples: {len(X_corrupt_train)}")
+    print(f"   corrut Test samples: {len(X_corrupt_test)}")
     
     # Train new model on corrupted data
-    corrupted_model = train.build_model()
-    corrupted_model.fit(X_corrupt_train, y_corrupt_train)
+    #corrupted_model = train.build_model()
+    #corrupted_model.fit(X_corrupt_train, y_corrupt_train)
+
+    clean_model = train.build_model()
+    clean_model.fit(X_clean_train, y_clean_train)
     
     # Evaluate on corrupted test set
-    y_pred_corrupt = corrupted_model.predict(X_corrupt_test)
-    corrupt_acc = accuracy_score(y_corrupt_test, y_pred_corrupt)
-    
-    print(f"\n   📊 Model Trained on Corrupted Data: {batch_name}")
-    print(f"   Accuracy: {corrupt_acc:.4f}")
-    
+    #y_pred_corrupt = corrupted_model.predict(X_corrupt_test)
+    #corrupt_acc = accuracy_score(y_corrupt_test, y_pred_corrupt)
+
+    #evaluate on clean test set
+    y_pred_clean = clean_model.predict(X_clean_test)
+    clean_acc = accuracy_score(y_clean_test, y_pred_clean)
+
+    print(f"\n   📊 Model Trained on Cleaned Data: {batch_name}")
+    print(f"   Accuracy: {clean_acc:.4f}")
+    print(f"\n   📊 Baseline:")
+    print(f"   Accuracy: {baseline_acc:.4f}")
+
     # Store results
-    corruption_results[batch_name] = {
-        "accuracy": corrupt_acc,
-        "train_size": len(X_corrupt_train),
-        "test_size": len(X_corrupt_test),
-        "predictions": y_pred_corrupt,
-        "true_labels": y_corrupt_test,
-        "model": corrupted_model
+    #corruption_results[batch_name] = {
+    #    "accuracy": corrupt_acc,
+    #    "train_size": len(X_corrupt_train),
+    #    "test_size": len(X_corrupt_test),
+    #    "predictions": y_pred_corrupt,
+    #    "true_labels": y_corrupt_test,
+    #    "model": corrupted_model
+    #}
+    cleaning_results[batch_name] = {
+        "accuracy": clean_acc,
+        "train_size": len(X_clean_train),
+        "test_size": len(X_clean_test),
+        "predictions": y_pred_clean,
+        "true_labels": y_clean_test,
+        "model": clean_model
     }
-    
-    # Compare to baseline
-    accuracy_drop = baseline_acc - corrupt_acc
+
+    # Compare cleaned to baseline
+    accuracy_drop = baseline_acc - clean_acc
     drop_percentage = (accuracy_drop / baseline_acc) * 100
-    print(f"\n   📉 Comparison to Baseline:")
+    print(f"\n   📉 Corrupt Comparison to Baseline:")
     print(f"      Baseline Accuracy: {baseline_acc:.4f}")
     print(f"      Drop: {accuracy_drop:.4f} ({drop_percentage:.2f}%)")
     

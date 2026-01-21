@@ -34,18 +34,12 @@ def validate_labels(df):
     return df_clean
 
 def clean_all(df):
-    original_size = len(df)
     df_clean = df.copy()
     df_clean = remove_nans(df_clean)
-    after_nan_removal = len(df_clean)
     df_clean = clean_text(df_clean)
-    after_text_clean = len(df_clean)
     df_clean = convert_labels(df_clean)
-    after_numeric = len(df_clean)
     df_clean = remove_nan_labels(df_clean)
-    after_label_removal = len(df_clean)
     df_clean = validate_labels(df_clean)
-    final_size = len(df_clean)
 
         # Print cleaning summary
     #print(f"\n   🧹 Data Cleaning Summary:")

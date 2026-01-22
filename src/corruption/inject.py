@@ -1,72 +1,32 @@
-from jenga.corruptions.generic import MissingValues, SwappedValues
+from jenga.corruptions.generic import MissingValues, SwappedValues, CategoricalShift
 from jenga.corruptions.text import BrokenCharacters
+from jenga.corruptions.numerical import GaussianNoise, Scaling
+import numpy as np
 import pandas as pd
 
-def apply_missing_values(df, fraction=0.30):
+#generic
+def missing_values(df, columns = [], fraction=0.30):
     """Batch 01: Missing Values in text"""
+    if columns == []:
+        columns = df.columns.tolist()
     df = df.copy()
-    mv = MissingValues(column="text", fraction=fraction, missingness="MCAR")
-    return mv.transform(df)
-
-def apply_broken_characters(df, fraction=0.25):
-    """Batch 02: Broken Characters in text"""
-    df = df.copy()
-    bc = BrokenCharacters(column="text", fraction=fraction)
-    return bc.transform(df)
-
-def apply_swapped_text(df, fraction=0.20):
-    """Batch 03: Swapped text values"""
-    df = df.copy()
-    sv = SwappedValues(column="text", fraction=fraction)
-    return sv.transform(df)
-
-def apply_missing_labels(df, fraction=0.15):
-    """Batch 04: Missing Labels"""
-    df = df.copy()
-    mv = MissingValues(column="label", fraction=fraction, missingness="MCAR")
-    return mv.transform(df)
-
-def apply_swapped_labels(df, fraction=0.12):
-    """Batch 05: Swapped Labels"""
-    df = df.copy()
-    sv = SwappedValues(column="label", fraction=fraction)
-    return sv.transform(df)
-
-def apply_combined_text_corruption(df):
-    """Batch 06: Broken Chars (10%) + Missing (8%)"""
-    df = df.copy()
-    bc = BrokenCharacters(column="text", fraction=0.10)
-    df = bc.transform(df)
-    mv = MissingValues(column="text", fraction=0.08, missingness="MCAR")
-    return mv.transform(df)
-
-def apply_combined_text_labels(df):
-    """Batch 07: Swapped Text (15%) + Swapped Labels (8%)"""
-    df = df.copy()
-    sv_text = SwappedValues(column="text", fraction=0.15)
-    df = sv_text.transform(df)
-    sv_label = SwappedValues(column="label", fraction=0.08)
-    return sv_label.transform(df)
-
-def apply_heavy_missing(df):
-    """Batch 08: Heavy Missing - Text (25%) + Labels (10%)"""
-    df = df.copy()
-    mv_text = MissingValues(column="text", fraction=0.25, missingness="MCAR")
-    df = mv_text.transform(df)
-    mv_label = MissingValues(column="label", fraction=0.10, missingness="MCAR")
-    return mv_label.transform(df)
-
-#corruption that cuts of the text after a specified character length 
-def apply_max_length_text(df, max_length=150):
-    """Batch 09: Max Length"""
-    df = df.copy()
-    #print("the average review length before: ", df["text"].str.len().mean())
-    df["text"] = df["text"].astype(str).str.slice(0, max_length)
-    #print("the average review length after: ", df["text"].str.len().mean())
+    for col in columns:
+        mv = MissingValues(column=col, fraction=fraction, missingness="MCAR")
+        df = mv.transform(df)
     return df
 
-def apply_duplicate_rows(df, fraction=0.10):
-    """Batch 10: Duplicate Rows (10%)"""
+def swapped_values(df, columns = [], fraction=0.05):
+    """Batch 02: Swapped text values"""
+    df = df.copy()
+    if columns == []:
+        columns = df.columns.tolist()
+    for col in columns:
+        sv = SwappedValues(column=col, fraction=fraction)
+        df = sv.transform(df)
+    return df
+
+def duplicate_rows(df, fraction=0.10):
+    """Batch 03: Duplicate Rows (10%)"""
     df = df.copy()
     n_duplicates = int(len(df) * fraction)
     duplicates = df.sample(n=n_duplicates, random_state=42)
@@ -75,34 +35,177 @@ def apply_duplicate_rows(df, fraction=0.10):
     #print("Total samples after duplication: ", len(df_with_duplicates))
     return df_with_duplicates
 
-def apply_all_corruptions(df):
-    """Batch 11: All - Broken (8%) + Swapped (10%) + Missing (5%)"""
+#category
+def category_shift(df, columns=[], fraction=0.10):
+    """Batch 04: Category Shift"""
     df = df.copy()
-    bc = BrokenCharacters(column="text", fraction=0.08)
-    df = bc.transform(df)
-    sv_text = SwappedValues(column="text", fraction=0.10)
-    df = sv_text.transform(df)
-    mv_text = MissingValues(column="text", fraction=0.05, missingness="MCAR")
-    df = mv_text.transform(df)
-    sv_label = SwappedValues(column="label", fraction=0.05)
-    return sv_label.transform(df)
+    if columns == []:
+        #check if the column is a categorical column
+        columns = [col for col in df.columns if col == "category"]
+    for col in columns:
+        cs = CategoricalShift(column=col, fraction=fraction)
+        df = cs.transform(df)
+    return df
+
+#text-specific
+def broken_characters(df, columns = [], fraction=0.25):
+    """Batch 05: Broken Characters in text"""
+    df = df.copy()
+    if columns == []:
+        columns = [col for col in df.columns if pd.api.types.is_string_dtype(df[col])]
+    for col in columns:
+        if pd.api.types.is_string_dtype(df[col]):
+            bc = BrokenCharacters(column=col, fraction=fraction)
+            df = bc.transform(df)
+    return df
+
+def text_length_limit(df, columns = [], max_length=150, fraction=1.0):
+    """Batch 06: Max Length"""
+    df = df.copy()
+    if columns == []:
+        columns = [col for col in df.columns if pd.api.types.is_string_dtype(df[col])]
+    #print("the average review length before: ", df["text"].str.len().mean())
+    #sample a fraction of the rows to apply the length limit
+    n_rows = len(df)
+    n_sample = int(n_rows * fraction)
+    rows = df.sample(n=n_sample, random_state=42).index
+
+    for col in columns:
+        if pd.api.types.is_string_dtype(df[col]):
+            df.loc[rows, col] = (
+                df.loc[rows, col]
+                .astype(str)
+                .str.slice(0, max_length)
+            )
+    #print("the average review length after: ", df["text"].str.len().mean())
+    return df
+
+#numeric
+def gaussian_noise(df, columns = [], fraction=0.10):
+    """Batch 07: Gaussian Noise (10%)"""
+    df = df.copy()
+    if columns == []:
+        columns = [col for col in df.columns if pd.api.types.is_numeric_dtype(df[col])]
+
+    for col in columns:
+        if pd.api.types.is_numeric_dtype(df[col]):
+            gn = GaussianNoise(column=col, fraction=fraction)
+            df = gn.transform(df)
+    return df
+
+def scaling(df, columns = [], fraction=0.10):
+    """Batch 08: Scaling (10%)"""
+    df = df.copy()
+    if columns == []:
+        columns = [col for col in df.columns if pd.api.types.is_numeric_dtype(df[col])]
+
+    for col in columns:
+        if pd.api.types.is_numeric_dtype(df[col]):
+            sc = Scaling(column=col, fraction=fraction)
+            df = sc.transform(df)
+    return df
+
+def constraint_violation(df, column, lower_bound, upper_bound, fraction=0.10):
+    """Batch 09: Constraint Violations (10%)"""
+    df = df.copy()
+    n_rows = len(df)
+    n_sample = int(n_rows * fraction)
+    rows = df.sample(n=n_sample, random_state=42).index
+
+    if pd.api.types.is_numeric_dtype(df[column]):
+        #replace every number with upper_bound + 1 or lower_bound - 1 randomly
+        for row in rows:
+            if np.random.rand() > 0.5:
+                df.at[row, column] = upper_bound + np.random.rand()*np.absolute(upper_bound)
+            else:
+                df.at[row, column] = lower_bound - np.random.rand()*np.absolute(lower_bound)
+    return df
+
+def numeric_to_text(df, columns = [], fraction=0.10):
+    """Batch 10: Numeric to Text (10%)"""
+    df = df.copy()
+    if columns == []:
+        columns = [col for col in df.columns if pd.api.types.is_numeric_dtype(df[col])]
+
+    n_rows = len(df)
+    n_sample = int(n_rows * fraction)
+    rows = df.sample(n=n_sample, random_state=42).index
+
+    for col in columns:
+        if pd.api.types.is_numeric_dtype(df[col]):
+            df.loc[rows, col] = df.loc[rows, col].astype(str)
+    return df
+
+def negative_values(df, columns = [], fraction=0.10):
+    """Batch 11: Negative Values (10%)"""
+    df = df.copy()
+    if columns == []:
+        columns = [col for col in df.columns if pd.api.types.is_numeric_dtype(df[col])]
+
+    n_rows = len(df)
+    n_sample = int(n_rows * fraction)
+    rows = df.sample(n=n_sample, random_state=42).index
+
+    for col in columns:
+        if pd.api.types.is_numeric_dtype(df[col]):
+            df.loc[rows, col] = -absolute(df.loc[rows, col])
+    return df
+
+#combinations
+def all_text_corruptions(df, columns = []):
+    """Batch 12: All Text - Missing (5%) + Swapped (5%) + Duplicate Rows (10%) + Broken Characters (8%) + Max Length (150)"""
+    df = df.copy()
+    if columns == []:
+        columns = [col for col in df.columns if pd.api.types.is_string_dtype(df[col])]
+    
+    df = missing_values(df, columns=columns, fraction=0.05)
+    df = swapped_values(df, columns=columns, fraction=0.05)
+    df = duplicate_rows(df, fraction=0.10)
+
+    df = broken_characters(df, columns=columns, fraction=0.08)
+    df = text_length_limit(df, columns=columns, max_length=150)
+    return df
+
+def all_numerical_corruptions(df, columns = []):
+    """Batch 13: All Numeric - Missing (5%) + Swapped (5%) + Duplicate Rows (10%) + Gaussian Noise (10%) + Scaling (10%)"""
+    df = df.copy()
+    if columns == []:
+        columns = [col for col in df.columns if pd.api.types.is_numeric_dtype(df[col])]
+
+    df = missing_values(df, columns=columns, fraction=0.05)
+    df = swapped_values(df, columns=columns, fraction=0.05)
+    df = duplicate_rows(df, fraction=0.10)
+
+    df = gaussian_noise(df, columns=columns, fraction=0.10)
+    df = scaling(df, columns=columns, fraction=0.10)
+    return df
+
+def all_corruptions(df, text_columns = [], numerical_columns = []):
+    """Batch 14: All Corruptions"""
+    df = df.copy()
+    df = all_text_corruptions(df, columns=text_columns)
+    df = all_numerical_corruptions(df, columns=numerical_columns)
+    df = category_shift(df, columns=[], fraction=0.10)
+    return df
 
 corruption_functions = [
-    ("01_missing_text", apply_missing_values, {}),
-    ("02_broken_characters", apply_broken_characters, {}),
-    ("03_swapped_text", apply_swapped_text, {}),
-    ("04_missing_labels", apply_missing_labels, {}),
-    ("05_swapped_labels", apply_swapped_labels, {}),
-    ("06_combined_text_corruption", apply_combined_text_corruption, {}),
-    ("07_combined_text_labels", apply_combined_text_labels, {}),
-    ("08_heavy_missing", apply_heavy_missing, {}),
-    ("09_max_length", apply_max_length_text, {}),
-    ("10_duplicate_rows", apply_duplicate_rows, {}),
-    ("11_all_corruptions", apply_all_corruptions, {}),
+    ("01_missing_values", missing_values, {}),
+    ("02_swapped_values", swapped_values, {}),
+    ("03_duplicate_rows", duplicate_rows, {}),
+    ("04_category_shift", category_shift, {}),
+    ("05_broken_characters", broken_characters, {}),
+    ("06_text_length_limit", text_length_limit, {}),
+    ("07_gaussian_noise", gaussian_noise, {}),
+    ("08_scaling", scaling, {}),
+    ("09_constraint_violation", constraint_violation, {"column": "rating", "lower_bound": 0, "upper_bound": 5}),
+    ("10_numeric_to_text", numeric_to_text, {}),
+    ("11_negative_values", negative_values, {}),
+    ("12_all_text_corruptions", all_text_corruptions, {}),
+    ("13_all_numerical_corruptions", all_numerical_corruptions, {}),
+    ("14_all_corruptions", all_corruptions, {}),
 ]
 
 test_functions = [
-    ("09_max_length", apply_max_length_text, {}),
-    ("10_duplicate_rows", apply_duplicate_rows, {}),
+    ("09_constraint_violation", constraint_violation, {"column": "rating", "lower_bound": 0, "upper_bound": 5}),
 ]
 print("✅ Corruption functions defined")

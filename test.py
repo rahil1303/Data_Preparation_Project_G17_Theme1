@@ -105,12 +105,12 @@ baseline_metrics = {
 }
 
 df_corrupt_source = df.iloc[len(X_train) + len(X_test):][["text", "label"]].copy()
-if len(df_corrupt_source) < 5000:
-    df_corrupt_source = df.sample(n=5000, random_state=42).reset_index(drop=True)
+if len(df_corrupt_source) < 10000:
+    df_corrupt_source = df.sample(n=10000, random_state=42).reset_index(drop=True)
 else:
-    df_corrupt_source = df_corrupt_source.sample(n=5000, random_state=42).reset_index(drop=True)
+    df_corrupt_source = df_corrupt_source.sample(n=10000, random_state=42).reset_index(drop=True)
 
-batches_config = inject.corruption_functions
+batches_config = inject.test_functions
 
 corrupted_batches = {}
 
@@ -150,10 +150,10 @@ for batch_name, df_batch in corrupted_batches.items():
         random_state=42,
         stratify=y_clean
     )
-    
-    print(f"   corrupt Train samples: {len(X_corrupt_train)}")
-    print(f"   corrut Test samples: {len(X_corrupt_test)}")
-    
+
+    print(f"   cleaned Train samples: {len(X_clean_train)}")
+    print(f"   cleaned Test samples: {len(X_clean_test)}")
+
     # Train new model on corrupted data
     #corrupted_model = train.build_model()
     #corrupted_model.fit(X_corrupt_train, y_corrupt_train)

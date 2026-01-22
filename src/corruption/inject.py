@@ -105,7 +105,7 @@ def scaling(df, columns = [], fraction=0.10):
             df = sc.transform(df)
     return df
 
-def constraint_violation(df, column, lower_bound, upper_bound, fraction=0.10):
+def constraint_violation(df, column = "age", lower_bound = 0, upper_bound = 100, fraction=0.10):
     """Batch 09: Constraint Violations (10%)"""
     df = df.copy()
     n_rows = len(df)
@@ -197,7 +197,7 @@ corruption_functions = [
     ("06_text_length_limit", text_length_limit, {}),
     ("07_gaussian_noise", gaussian_noise, {}),
     ("08_scaling", scaling, {}),
-    ("09_constraint_violation", constraint_violation, {"column": "rating", "lower_bound": 0, "upper_bound": 5}),
+    ("09_constraint_violation", constraint_violation, {}),
     ("10_numeric_to_text", numeric_to_text, {}),
     ("11_negative_values", negative_values, {}),
     ("12_all_text_corruptions", all_text_corruptions, {}),
@@ -206,6 +206,11 @@ corruption_functions = [
 ]
 
 test_functions = [
-    ("09_constraint_violation", constraint_violation, {"column": "rating", "lower_bound": 0, "upper_bound": 5}),
+    ("07_gaussian_noise", gaussian_noise, {}),
+    ("08_scaling", scaling, {}),
+    ("09_constraint_violation", constraint_violation, {}),
+    ("10_numeric_to_text", numeric_to_text, {}),
+    ("11_negative_values", negative_values, {}),
+    ("13_all_numerical_corruptions", all_numerical_corruptions, {}),
 ]
 print("✅ Corruption functions defined")

@@ -1,3 +1,4 @@
+from multiprocessing.resource_sharer import stop
 from datasets import load_dataset
 from sklearn.compose import ColumnTransformer
 from sklearn.discriminant_analysis import StandardScaler
@@ -46,6 +47,7 @@ preprocessor = ColumnTransformer(
         ('num', numeric_transformer, numeric_features),
         ('cat', categorical_transformer, categorical_features)
     ])
+
 clf = Pipeline(steps=[
     ('preprocessor', preprocessor),
     ('classifier', GradientBoostingClassifier(
@@ -64,42 +66,24 @@ clf.fit(X_train, y_train)
 
 y_pred = clf.predict(X_test)
 
-baseline_model = Pipeline(steps=[
-    ('preprocessor', preprocessor),
-    ('classifier', GradientBoostingClassifier(
-        n_estimators=300,
-        learning_rate=0.06,
-        max_depth=5,
-        random_state=42
-    ))
-])
-
-baseline_model.fit(X_train, y_train)
-
-y_pred_baseline = baseline_model.predict(X_test)
-
-baseline_acc = accuracy_score(y_test, y_pred_baseline)
-
 print(f"Accuracy: {accuracy_score(y_test, y_pred):.4f}")
 print("\nClassification Report:")
 print(classification_report(y_test, y_pred))
 
-# Prepare a DataFrame for corruption
-df_full = X.copy()
-df_full["income"] = y.values.ravel()
+baseline_acc = accuracy_score(y_test, y_pred)
 
+print(f"Baseline Accuracy: {baseline_acc:.4f}")
 
-# Use remaining data or sample if not enough
-remaining = df_full.drop(X_train.index).drop(X_test.index, errors="ignore")
+df = X.copy()
+df["income"] = y.values.ravel()
 
-if len(remaining) < 5000:
-    df_corrupt_source = df_full.sample(n=5000, random_state=42).reset_index(drop=True)
+df_corrupt_source = df.iloc[len(X_train) + len(X_test):].copy()
+if len(df_corrupt_source) < 5000:
+    df_corrupt_source = df.sample(n=5000, random_state=42).reset_index(drop=True)
 else:
-    df_corrupt_source = remaining.sample(n=5000, random_state=42).reset_index(drop=True)
-
+    df_corrupt_source = df_corrupt_source.sample(n=5000, random_state=42).reset_index(drop=True)
 
 batches_config = inject.test_functions
-
 corrupted_batches = {}
 
 for batch_name, corruption_fn, kwargs in batches_config:
@@ -112,9 +96,12 @@ for batch_name, corruption_fn, kwargs in batches_config:
 
 print(f"\n✅ All 9 batches generated in {CORRUPT_DIR}")
 
+# Store results
 corruption_results = {}
 
 for batch_name, df_batch in corrupted_batches.items():
+    print(f"\n{'='*70}")
+    print(f"🚨 Evaluating Corrupted Batch: {batch_name}")
 
     X_corrupt = df_batch[selected_features]
     y_corrupt = df_batch["income"]
@@ -131,7 +118,17 @@ for batch_name, df_batch in corrupted_batches.items():
     print(f"   Test samples: {len(X_corrupt_test)}")
     
     # Train new model on corrupted data
-    corrupted_model = train.build_model()
+    corrupted_model = Pipeline(steps=[
+        ('preprocessor', preprocessor),
+        ('classifier', GradientBoostingClassifier(
+            n_estimators=300,
+            learning_rate=0.06,
+            max_depth=5,
+            random_state=42
+        ))
+        ]
+    )
+    
     corrupted_model.fit(X_corrupt_train, y_corrupt_train)
     
     # Evaluate on corrupted test set

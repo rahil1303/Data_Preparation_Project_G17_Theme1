@@ -91,6 +91,7 @@ def gaussian_noise(df, columns = [], fraction=0.10):
         if pd.api.types.is_numeric_dtype(df[col]):
             gn = GaussianNoise(column=col, fraction=fraction)
             df = gn.transform(df)
+    
     return df
 
 def scaling(df, columns = [], fraction=0.10):
@@ -178,6 +179,9 @@ def all_numerical_corruptions(df, columns = []):
 
     df = gaussian_noise(df, columns=columns, fraction=0.10)
     df = scaling(df, columns=columns, fraction=0.10)
+    df = constraint_violation(df, column="age", lower_bound=0, upper_bound=100, fraction=0.10)
+    df = numeric_to_text(df, columns=columns, fraction=0.10)
+    df = negative_values(df, columns=columns, fraction=0.10)
     return df
 
 def all_corruptions(df, text_columns = [], numerical_columns = []):

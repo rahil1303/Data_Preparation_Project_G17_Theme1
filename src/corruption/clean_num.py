@@ -1,115 +1,89 @@
-import pandas as pd
+import re
 import numpy as np
-
-from AutoClean import AutoClean  # pip install py-AutoClean
+import pandas as pd
+from sklearn.impute import KNNImputer, SimpleImputer
 from cleanlab.classification import CleanLearning
-from sklearn.preprocessing import RobustScaler, PowerTransformer
-from sklearn.ensemble import IsolationForest
-from sklearn.impute import KNNImputer
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from AutoClean import AutoClean
 
-def clean_model_aware_numeric(
-    df,
-    model_pipeline,
-    label_col="label",
-    numeric_cols=None,
-    cv_folds=3
-):
-    df = df.copy()
-    initial_count = len(df)
-
-    if numeric_cols is None:
-        raise ValueError("numeric_cols must be specified")
-
-    # ensure labels start at 0
-    y = df[label_col].values
-    if y.min() != 0:
-        y = y - y.min()
-
-    try:
-        X = df[numeric_cols]
-
-        cl = CleanLearning(clf=model_pipeline, cv_n_folds=cv_folds, seed=42)
-        cl.fit(X, y)
-
-        label_issues = cl.get_label_issues()
-        is_issue = label_issues["is_label_issue"].values
-
-        # confidence stats
-        probs = cl.predict_proba(X)
-        max_conf = probs.max(axis=1)
-
-        stats = {
-            "n_issues": int(is_issue.sum()),
-            "issue_rate": float(is_issue.sum() / initial_count),
-            "avg_conf_clean": float(max_conf[~is_issue].mean()),
-            "avg_conf_noisy": float(max_conf[is_issue].mean()),
-            "class_noise": df.assign(is_issue=is_issue).groupby(label_col)["is_issue"].mean().to_dict()
-        }
-
-        df_clean = df.loc[~is_issue].copy()
-
-        return df_clean, {
-            "dropped": initial_count - len(df_clean),
-            "name": "Model-Aware Numeric Cleaning (cleanlab)",
-            "stats": stats
-        }
-
-    except Exception as e:
-        return df, {
-            "dropped": 0,
-            "name": "Model-Aware Numeric Cleaning (Failed)",
-            "stats": None,
-            "error": str(e)
-        }
+def salvage_numeric_str(x) -> float:
+    """Extract the first integer-like token from a value (string/others). Returns np.nan if none."""
+    s = str(x).strip()
+    s = re.sub(r"[a-zA-Z]", "", s)
+    m = re.search(r"[+-]?\d+(\.\d+)?", s)
+    if m:
+        return abs(int(float(m.group(0)))) 
+    return np.nan
 
 
-def scale_robust(series):
-    scaler = RobustScaler()
-    return pd.Series(scaler.fit_transform(series.values.reshape(-1, 1)).ravel(), index=series.index)
-
-def power_transform(series, method="yeo-johnson"):
-    pt = PowerTransformer(method=method)
-    return pd.Series(pt.fit_transform(series.values.reshape(-1, 1)).ravel(), index=series.index)
-
-def outliers_isolation_forest(df, numeric_cols, contamination=0.01):
-    model = IsolationForest(contamination=contamination, random_state=42)
-    mask = model.fit_predict(df[numeric_cols]) == 1
-    return df.loc[mask]
-
-
-def clean_adult_dataset(df, model_pipeline, label_col="income", numeric_cols=None, use_model_cleaning=True):
+def salvage_numeric_columns(
+    df: pd.DataFrame,
+    numeric_cols: list[str],
+) -> pd.DataFrame:
     """
-    Mixed cleaning for UCI Adult dataset:
-    - AutoClean handles structure, missing values, encoding, basic outlier winsorization
-    - Optional numeric transformations & isolation forest
-    - Optional Cleanlab row-level label noise detection
+    Apply salvage_numeric_str to each entry of the specified numeric columns.
+
+    - Operates column-by-column (pandas 2.x safe)
+    - Preserves index and column order
+    - Does NOT mutate the input DataFrame
     """
-    df = df.copy()
+    df_out = df.copy()
 
-    # ---------- Step 1: AutoClean structural + missing + encoding ----------
-    cleaner = AutoClean(df, mode="auto")
-    df = cleaner.output
+    for col in numeric_cols:
+        if col not in df_out.columns:
+            raise KeyError(f"Column '{col}' not found in DataFrame.")
 
-    # ---------- Step 2: Optional numeric transformations ----------
-    if numeric_cols is not None:
-        for col in numeric_cols:
-            # Robust scaling
-            df[col] = scale_robust(df[col])
-            # Power transform (Yeo-Johnson)
-            df[col] = power_transform(df[col])
+        df_out[col] = df_out[col].apply(salvage_numeric_str)
 
-    # ---------- Step 3: Optional IsolationForest outlier removal ----------
-    if numeric_cols is not None:
-        df = outliers_isolation_forest(df, numeric_cols)
+    return df_out
 
-    # ---------- Step 4: Model-aware cleaning with cleanlab ----------
-    if use_model_cleaning and numeric_cols is not None:
-        df, model_stats = clean_model_aware_numeric(
-            df, model_pipeline=model_pipeline,
-            label_col=label_col,
-            numeric_cols=numeric_cols
-        )
-    else:
-        model_stats = None
+def impute_columns(
+    df: pd.DataFrame,
+    numeric_cols: list,
+) -> pd.DataFrame:
 
-    return df, model_stats
+    df_out = df.copy()
+
+    imputer = SimpleImputer()
+
+    df_out[numeric_cols] = imputer.fit_transform(df_out[numeric_cols])
+
+    return df_out
+
+def run_cleanlab(df_cleaned, clf, label_col, threshold=0.95):
+    y = df_cleaned[label_col]
+    X = df_cleaned.drop(columns=[label_col])
+
+    y_codes = pd.Categorical(y).codes
+    cl = CleanLearning(clf, seed=42)
+    cl.fit(X, y_codes)
+
+    label_issues = cl.get_label_issues()
+    is_flagged = label_issues['is_label_issue'].values
+
+    probs = cl.predict_proba(X)
+    max_conf = probs.max(axis=1)
+    is_high_conf_suspect = is_flagged & (max_conf >= threshold)
+
+    return X.loc[~is_high_conf_suspect].reset_index(drop=True), y.loc[~is_high_conf_suspect].reset_index(drop=True)
+
+def run_num_clean(numeric_features, X, y, clf, use_cleanlab=False):
+    numericified = salvage_numeric_columns(X, numeric_features)
+
+    imputed=impute_columns(numericified, numeric_cols=numeric_features)
+    scaler = StandardScaler()
+    imputed[numeric_features] = scaler.fit_transform(imputed[numeric_features])
+
+    df_combined_for_autoclean = pd.concat([imputed, y], axis=1) 
+    label_col = 'income'  
+
+    cleaner = AutoClean(
+        df_combined_for_autoclean,
+        mode='auto'
+    )
+
+    df = cleaner.output.reset_index(drop=True) 
+    if use_cleanlab:
+        return run_cleanlab(df, clf, label_col)
+    
+    return df.drop(columns=[label_col]), df[label_col]

@@ -15,14 +15,26 @@ def missing_values(df, columns = [], fraction=0.30):
         df = mv.transform(df)
     return df
 
-def swapped_values(df, columns = [], fraction=0.05):
-    """Batch 02: Swapped text values"""
+def swapped_values(df, columns=None, fraction=0.01, random_state=None):
     df = df.copy()
-    if columns == []:
+    rng = np.random.default_rng(random_state)
+    if columns is None:
         columns = df.columns.tolist()
     for col in columns:
-        sv = SwappedValues(column=col, fraction=fraction)
-        df = sv.transform(df)
+        # categorical / object → use jenga
+        if pd.api.types.is_object_dtype(df[col]) or pd.api.types.is_categorical_dtype(df[col]):
+            df[col] = df[col].astype(object)
+            sv = SwappedValues(column=col, fraction=fraction)
+            df = sv.transform(df)
+
+        # numeric → swap numeric values only with random permutation
+        elif pd.api.types.is_numeric_dtype(df[col]):
+            idx = df[col].dropna().sample(frac=fraction, random_state=random_state).index
+            df.loc[idx, col] = rng.permutation(df.loc[idx, col].values)
+
+        else:
+            raise TypeError(f"Unsupported dtype for column {col}: {df[col].dtype}")
+
     return df
 
 def duplicate_rows(df, fraction=0.10):
@@ -84,14 +96,20 @@ def text_length_limit(df, columns = [], max_length=150, fraction=1.0):
 def gaussian_noise(df, columns = [], fraction=0.10):
     """Batch 07: Gaussian Noise (10%)"""
     df = df.copy()
-    if columns == []:
-        columns = [col for col in df.columns if pd.api.types.is_numeric_dtype(df[col])]
-
     for col in columns:
-        if pd.api.types.is_numeric_dtype(df[col]):
-            gn = GaussianNoise(column=col, fraction=fraction)
-            df = gn.transform(df)
-    
+        cur = df[col]
+        numeric_mask = cur.notna()
+
+        if numeric_mask.sum() == 0:
+            continue
+
+        temp_df = pd.DataFrame({col: cur.copy()})  
+
+        gn = GaussianNoise(column=col, fraction=fraction)
+        temp_out = gn.transform(temp_df)
+
+        df.loc[numeric_mask, col] = temp_out.loc[numeric_mask, col]
+
     return df
 
 def scaling(df, columns = [], fraction=0.10):
@@ -125,8 +143,6 @@ def constraint_violation(df, column = "age", lower_bound = 0, upper_bound = 100,
 def numeric_to_text(df, columns = [], fraction=0.10):
     """Batch 10: Numeric to Text (10%)"""
     df = df.copy()
-    if columns == []:
-        columns = [col for col in df.columns if pd.api.types.is_numeric_dtype(df[col])]
 
     n_rows = len(df)
     n_sample = int(n_rows * fraction)
@@ -134,6 +150,7 @@ def numeric_to_text(df, columns = [], fraction=0.10):
 
     for col in columns:
         if pd.api.types.is_numeric_dtype(df[col]):
+            df[col] = df[col].astype(object)
             df.loc[rows, col] = df.loc[rows, col].astype(str)
     return df
 
@@ -173,15 +190,15 @@ def all_numerical_corruptions(df, columns = []):
     if columns == []:
         columns = [col for col in df.columns if pd.api.types.is_numeric_dtype(df[col])]
 
-    df = missing_values(df, columns=columns, fraction=0.05)
-    df = swapped_values(df, columns=columns, fraction=0.05)
-    df = duplicate_rows(df, fraction=0.10)
+    df = swapped_values(df, columns=columns, fraction=0.5)
+    df = missing_values(df, columns=columns, fraction=0.5)
+    df = duplicate_rows(df, fraction=0.1)
 
-    df = gaussian_noise(df, columns=columns, fraction=0.10)
-    df = scaling(df, columns=columns, fraction=0.10)
-    df = constraint_violation(df, column="age", lower_bound=0, upper_bound=100, fraction=0.10)
-    df = numeric_to_text(df, columns=columns, fraction=0.10)
-    df = negative_values(df, columns=columns, fraction=0.10)
+    df = gaussian_noise(df, columns=columns, fraction=0.25)
+    df = scaling(df, columns=columns, fraction=0.25)
+    df = constraint_violation(df, column="age", lower_bound=0, upper_bound=100, fraction=0.25)
+    df = numeric_to_text(df, columns=columns, fraction=0.25)
+    df = negative_values(df, columns=columns, fraction=0.25)
     return df
 
 def all_corruptions(df, text_columns = [], numerical_columns = []):

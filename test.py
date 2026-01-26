@@ -18,16 +18,19 @@ BASE_DIR = Path(__file__).resolve().parent
 INCOME_DIR = os.path.join(BASE_DIR, "income_dataset")
 CORRUPT_DIR = os.path.join(INCOME_DIR, "corrupted_batches")
 ARTIFACTS_DIR = os.path.join(BASE_DIR, "artifacts")
+print("test -1")
 
 os.makedirs(INCOME_DIR, exist_ok=True)
 os.makedirs(CORRUPT_DIR, exist_ok=True)
 os.makedirs(ARTIFACTS_DIR, exist_ok=True)
+print("test 0")
+
 
 #load dataset
 adult = fetch_ucirepo(id=2)
 X = adult.data.features
 y = adult.data.targets.copy()
-
+print("test 1")
 y.iloc[:, 0] = y.iloc[:, 0].str.replace('.', '', regex=False).str.strip()
 
 selected_features = ['age', 'workclass', 'education-num', 'marital-status',
@@ -41,6 +44,7 @@ categorical_features = ['workclass', 'marital-status', 'occupation', 'relationsh
 
 numeric_transformer = StandardScaler()
 categorical_transformer = OneHotEncoder(handle_unknown='ignore')
+print("test 2")
 
 preprocessor = ColumnTransformer(
     transformers=[
@@ -57,6 +61,7 @@ clf = Pipeline(steps=[
         random_state=42
     ))
 ])
+print("test 3")
 
 y_test = y.values.ravel()
 
@@ -73,6 +78,7 @@ print(classification_report(y_test, y_pred))
 baseline_acc = accuracy_score(y_test, y_pred)
 
 print(f"Baseline Accuracy: {baseline_acc:.4f}")
+print("test 4")
 
 df = X.copy()
 df["income"] = y.values.ravel()
@@ -82,10 +88,11 @@ if len(df_corrupt_source) < 5000:
     df_corrupt_source = df.sample(n=5000, random_state=42).reset_index(drop=True)
 else:
     df_corrupt_source = df_corrupt_source.sample(n=5000, random_state=42).reset_index(drop=True)
+print("test 5")
 
 batches_config = inject.test_functions
 corrupted_batches = {}
-
+print("test 6")
 for batch_name, corruption_fn, kwargs in batches_config:
     print(f"\n🔧 Batch {batch_name.split('_')[0]}: {batch_name.replace('_', ' ').title()}")
     df_batch = corruption_fn(df_corrupt_source, **kwargs)
@@ -94,7 +101,7 @@ for batch_name, corruption_fn, kwargs in batches_config:
     corrupted_batches[batch_name] = df_batch
     print(f"✅ {batch_name} generated")
 
-print(f"\n✅ All 9 batches generated in {CORRUPT_DIR}")
+print(f"\n✅ All batches generated in {CORRUPT_DIR}")
 
 # Store results
 corruption_results = {}

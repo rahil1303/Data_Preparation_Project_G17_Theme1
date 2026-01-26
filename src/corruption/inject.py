@@ -3,6 +3,8 @@ from jenga.corruptions.text import BrokenCharacters
 from jenga.corruptions.numerical import GaussianNoise, Scaling
 import numpy as np
 import pandas as pd
+import random
+
 
 #generic
 def missing_values(df, columns = [], fraction=0.30):
@@ -48,15 +50,52 @@ def duplicate_rows(df, fraction=0.10):
     return df_with_duplicates
 
 #category
-def category_shift(df, columns=[], fraction=0.10):
+def category_shift(df, columns=[], fraction=0.30):
     """Batch 04: Category Shift"""
     df = df.copy()
     if columns == []:
         #check if the column is a categorical column
-        columns = [col for col in df.columns if col == "category"]
+        columns = [col for col in df.columns if pd.api.types.is_object_dtype(df[col]) or pd.api.types.is_categorical_dtype(df[col])]
     for col in columns:
         cs = CategoricalShift(column=col, fraction=fraction)
         df = cs.transform(df)
+    return df
+
+def category_typo(df, columns = [], fraction = 0.30):
+    df = df.copy()
+    df_length = len(df)
+    sample = int(df_length * fraction)
+    rows = df.sample(n=sample, random_state=42).index
+
+    if columns == []:
+        #check if the column is a categorical column
+        columns = [col for col in df.columns if pd.api.types.is_object_dtype(df[col]) or pd.api.types.is_categorical_dtype(df[col])]
+    
+    def typo(val):
+        val = str(val)
+        if len(val) <= 1:
+            return val
+        i = random.randrange(len(val))
+        return val[:i] + val[i+1:]
+
+    for col in columns:
+        df.loc[rows, col] = df.loc[rows, col].apply(typo)
+    
+    return df
+
+def category_default(df, columns = [], fraction = 0.30):
+    df = df.copy()
+    df_length = len(df)
+    sample = int(df_length * fraction)
+    rows = df.sample(n=sample, random_state=42).index
+
+    if columns == []:
+        #check if the column is a categorical column
+        columns = [col for col in df.columns if pd.api.types.is_object_dtype(df[col]) or pd.api.types.is_categorical_dtype(df[col])]
+
+    for col in columns:
+        df.loc[rows, col] = "Default"
+    
     return df
 
 #text-specific
@@ -227,11 +266,8 @@ corruption_functions = [
 ]
 
 test_functions = [
-    ("07_gaussian_noise", gaussian_noise, {}),
-    ("08_scaling", scaling, {}),
-    ("09_constraint_violation", constraint_violation, {}),
-    ("10_numeric_to_text", numeric_to_text, {}),
-    ("11_negative_values", negative_values, {}),
-    ("13_all_numerical_corruptions", all_numerical_corruptions, {}),
+    ("CATEGORY_SHIFT", category_shift, {}),
+    ("CATEGORY_TYPO", category_typo, {}),
+    ("CATEGORY_DEFAULT", category_default, {}),
 ]
 print("✅ Corruption functions defined")

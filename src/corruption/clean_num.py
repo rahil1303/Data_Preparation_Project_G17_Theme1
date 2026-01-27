@@ -50,7 +50,7 @@ def impute_columns(
 
     return df_out
 
-def run_cleanlab(df_cleaned, clf, label_col, threshold=0.95):
+def run_cleanlab(df_cleaned, clf, label_col, threshold=0.98):
     y = df_cleaned[label_col]
     X = df_cleaned.drop(columns=[label_col])
 

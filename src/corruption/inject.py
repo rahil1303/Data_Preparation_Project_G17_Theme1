@@ -230,7 +230,7 @@ def all_numerical_corruptions(df, columns = []):
         columns = [col for col in df.columns if pd.api.types.is_numeric_dtype(df[col])]
 
     df = swapped_values(df, columns=columns, fraction=0.5)
-    df = missing_values(df, columns=columns, fraction=0.5)
+    df = missing_values(df, columns=columns, fraction=0.3)
     df = duplicate_rows(df, fraction=0.1)
 
     df = gaussian_noise(df, columns=columns, fraction=0.25)

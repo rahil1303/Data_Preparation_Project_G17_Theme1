@@ -201,7 +201,7 @@ def clean_progressive(X, y, numeric_columns, model_pipeline=None, levels=[1, 2, 
         X_clean, y_clean, meta = clean_semantic(X_clean, y_clean, numeric_columns)
         metadata["levels_applied"].append("Domain")
         metadata["total_dropped"] += meta["dropped"]
-        metadata["domain"] = meta
+        metadata["semantic"] = meta
     
     if 4 in levels and model_pipeline is not None:
         X_clean, y_clean, meta = clean_model_aware(X_clean, y_clean, model_pipeline, numeric_columns)

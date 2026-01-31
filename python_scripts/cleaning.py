@@ -199,7 +199,7 @@ def clean_progressive(X, y, numeric_columns, model_pipeline=None, levels=[1, 2, 
     
     if 3 in levels:
         X_clean, y_clean, meta = clean_semantic(X_clean, y_clean, numeric_columns)
-        metadata["levels_applied"].append("Domain")
+        metadata["levels_applied"].append("Semantic")
         metadata["total_dropped"] += meta["dropped"]
         metadata["semantic"] = meta
     
@@ -308,7 +308,7 @@ def clean_all(X, y, numeric_columns, model_pipeline=None, level="full"):
     level_map = {
         "basic": [1],
         "heuristic": [1, 2],
-        "domain": [1, 2, 3],
+        "semantic": [1, 2, 3],
         "model-aware": [1, 2, 3, 4],
         "full": [1, 2, 3, 4]
     }

@@ -179,18 +179,30 @@ def constraint_violation(df, column = "age", lower_bound = 0, upper_bound = 100,
                 df.at[row, column] = lower_bound - np.random.rand()*np.absolute(lower_bound)
     return df
 
-def numeric_to_text(df, columns = [], fraction=0.10):
-    """Batch 10: Numeric to Text (10%)"""
+def numeric_to_text(df, columns=[], fraction=0.10):
+    """Batch 10: Numeric to Text (per numeric cell)"""
     df = df.copy()
 
-    n_rows = len(df)
-    n_sample = int(n_rows * fraction)
-    rows = df.sample(n=n_sample, random_state=42).index
+    rng = np.random.default_rng(42)
+    n = len(df)
+
+    chars_to_inject = ['#','@','!','x','a']
 
     for col in columns:
         if pd.api.types.is_numeric_dtype(df[col]):
             df[col] = df[col].astype(object)
-            df.loc[rows, col] = df.loc[rows, col].astype(str)
+
+            mask = rng.random(n) < fraction
+
+            if not mask.any():
+                continue
+
+            picks = rng.choice(chars_to_inject, size=mask.sum(), replace=True)
+
+            df.loc[mask, col] = (
+                df.loc[mask, col].astype(str).values + picks
+            )
+
     return df
 
 def negative_values(df, columns = [], fraction=0.10):
